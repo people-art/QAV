@@ -1,7 +1,7 @@
 import streamlit as st
 import re
 import openai
-from scripts.qav import get_completion, get_thoughts, evaluate_answer
+from scripts.qav import get_completion, get_thoughts, evaluate_answer,select_mode_based_on_sentiment_and_keywords
 from dotenv import load_dotenv
 import os
 
@@ -31,7 +31,7 @@ def main():
     v_color = "red"
 
     # 定义不同的mode
-    modes = ["summarize", "paraphrase", "generate_response", "ask_details", "ask_reason", "challenge", "ask_example", "ask_implications", "related_topics", "go_deeper"]
+    models = ["summarize", "paraphrase", "generate_response", "ask_details", "ask_reason", "challenge", "ask_example", "ask_implications", "related_topics", "go_deeper"]
 
     st.write("演示Q（提问）、A（回答）和V（评估/验证）智能体协作。输入一个问题，开始演示:")
     
@@ -41,7 +41,7 @@ def main():
         conversation = [{"role": Role_Q, "content": user_question}]
         st.markdown(f'<p style="color:{q_color};">**{Role_Q}:** {user_question}</p>', unsafe_allow_html=True)
 
-        while len(conversation) < 10:  # Limit conversation to 10 turns (adjust as needed)
+        while len(conversation) < 50:  # Limit conversation to 50 turns (adjust as needed)
             # A answers the question
             answer = get_completion(user_question)
             conversation.append({"role": Role_A, "content": answer})
@@ -52,14 +52,27 @@ def main():
             conversation.append({"role": Role_V, "content": f"{rating}/10"})
             st.markdown(f'<p style="color:{v_color};">**{Role_V}:** {rating}/10</p>', unsafe_allow_html=True)
 
-            if rating >= 7:
+            
+
+            if rating >= 3:
                 # Generate next question
-                thoughts = get_thoughts(answer, modes)
+                selected_model = select_mode_based_on_sentiment_and_keywords(user_question, answer)    
+                
+                thoughts = get_thoughts(answer, [selected_model])
                 user_question = get_completion(thoughts)
                 conversation.append({"role": Role_Q, "content": user_question})
                 st.markdown(f'<p style="color:{q_color};">**{Role_Q}:** {user_question}</p>', unsafe_allow_html=True)
             else:
-                st.write("Please provide a better answer.")
+                st.write("请给出更好的回答.")
+                # Request a better answer
+                V_thoughts = get_thoughts(answer, "related_topics")
+                answer = get_completion(f"这个回答不好，根据我的思考 {V_thoughts} 重新回答。")
+                #chang_mind [todo] add new function to change mind.
+                conversation.append({"role": Role_A, "content": answer})
+                selected_model = select_mode_based_on_sentiment_and_keywords(user_question, answer)    
+                thoughts = get_thoughts(answer, [selected_model])
+                user_question = get_completion(thoughts)
+                st.markdown(f'<p style="color:{a_color};">**{Role_A}:** {answer}</p>', unsafe_allow_html=True)
 
         st.write("End of conversation.")
 
